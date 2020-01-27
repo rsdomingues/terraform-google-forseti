@@ -35,6 +35,9 @@ locals {
   server_env = file(
     "${path.module}/templates/scripts/forseti-server/forseti_env.sh.tpl",
   )
+  server_run_forseti = file(
+    "${path.module}/templates/scripts/forseti-server/run_forseti.sh.tpl",
+  )
 
   server_conf_path = "${var.forseti_home}/configs/forseti_conf_server.yaml"
   server_name      = "forseti-server-vm-${local.random_hash}"
@@ -71,6 +74,7 @@ data "template_file" "forseti_server_startup_script" {
     forseti_conf_server_checksum           = base64sha256(var.server_config_module.forseti-server-config)
     forseti_env                            = data.template_file.forseti_server_env.rendered
     forseti_environment                    = data.template_file.forseti_server_environment.rendered
+    run_forseti                            = data.template_file.forseti_server_run.rendered
     forseti_home                           = var.forseti_home
     forseti_repo_url                       = var.forseti_repo_url
     forseti_run_frequency                  = local.forseti_run_frequency
@@ -89,6 +93,7 @@ data "template_file" "forseti_server_environment" {
 
   vars = {
     forseti_home                     = var.forseti_home
+    forseti_scripts                  = var.forseti_scripts
     forseti_server_conf_path         = local.server_conf_path
     policy_library_home              = var.policy_library_home
     policy_library_sync_enabled      = var.policy_library_sync_enabled
@@ -111,6 +116,10 @@ data "template_file" "forseti_server_env" {
     cloudsql_db_user       = var.cloudsql_module.forseti-cloudsql-user
     cloudsql_db_password   = var.cloudsql_module.forseti-cloudsql-password
   }
+}
+
+data "template_file" "forseti_server_run" {
+  template = local.server_run_forseti
 }
 
 #------------------------#
@@ -216,6 +225,12 @@ resource "google_storage_bucket_object" "policy_library_sync_ssh_known_hosts" {
   count   = var.policy_library_sync_enabled && var.policy_library_sync_ssh_known_hosts != "" ? 1 : 0
   name    = "${var.policy_library_sync_gcs_directory_name}/known_hosts"
   content = var.policy_library_sync_ssh_known_hosts
+  bucket  = var.server_gcs_module.forseti-server-storage-bucket
+}
+
+resource "google_storage_bucket_object" "run_forseti_script" {
+  name    = "scripts/run_forseti.sh"
+  content = data.template_file.forseti_server_run.rendered
   bucket  = var.server_gcs_module.forseti-server-storage-bucket
 }
 
